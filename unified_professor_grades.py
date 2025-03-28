@@ -21,6 +21,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
 import time
+from io import StringIO
+import matplotlib.pyplot as plt
+import numpy as np
 
 GRADES_FILE = "grades.xlsx"
 INSTR_PARAM = "instructname"
@@ -58,7 +61,7 @@ def wait_for_table_stabilize(driver, max_wait=60, stable_duration=6):
         # get current table HTML, parse it
         current_html = driver.page_source
         try:
-            df_current = pd.read_html(current_html, header=None)[0]
+            df_current = pd.read_html(StringIO(current_html), header=None)[0]
         except ValueError:
             # if for some reason there's no table
             df_current = pd.DataFrame()
@@ -119,7 +122,7 @@ def get_professor_courses(prof_name: str) -> pd.DataFrame:
         print(f"\nPlease wait...")
         # Finally parse the entire table
         html = driver.page_source
-        raw = pd.read_html(html, header=None)[0]
+        raw = pd.read_html(StringIO(html), header=None)[0]
         raw.columns = raw.iloc[0]
         df = raw.drop(index=0).reset_index(drop=True)
         df = df.rename(columns={
@@ -130,6 +133,45 @@ def get_professor_courses(prof_name: str) -> pd.DataFrame:
         return df
     finally:
         driver.quit()
+
+
+def plot_grade_distribution(pivot_df, prof_name):
+    """
+    Creates a bar chart showing the grade distribution for a professor.
+    Shows percentage of students who received each grade.
+    """
+    # Calculate total students per grade across all courses
+    grade_counts = pivot_df[ALLOWED_GRADES].sum()
+    total_students = grade_counts.sum()
+    
+    # Calculate percentages
+    grade_percentages = (grade_counts / total_students * 100).round(1)
+    
+    # Create the plot
+    plt.figure(figsize=(12, 6))
+    bars = plt.bar(ALLOWED_GRADES, grade_percentages)
+    
+    # Customize the plot
+    plt.title(f'Grade Distribution for Professor {prof_name}\nBased on {total_students} students across all courses')
+    plt.xlabel('Grades')
+    plt.ylabel('Percentage of Students')
+    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    
+    # Add percentage labels on top of each bar
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2., height,
+                f'{height}%',
+                ha='center', va='bottom')
+    
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=45)
+    
+    # Adjust layout to prevent label cutoff
+    plt.tight_layout()
+    
+    # Show the plot
+    plt.show()
 
 
 def main():
@@ -172,8 +214,6 @@ def main():
         pivot = pivot.reindex(columns=["A*", "A", "B+", "B", "C+", "C", "D+", "D", "E", "F", "S", "X"], fill_value=0)
         pivot = pivot.reset_index()
 
-        import numpy as np
-
         # Only the letter grades that carry numeric weights:
         grade_points = {
             "A*": 10, "A": 10, "B+": 9, "B": 8, "C+": 7,
@@ -187,17 +227,28 @@ def main():
             weighted_sum += pivot[grade] * points
             total_counts += pivot[grade]
 
-        pivot["Average Grade"] = np.where(
+        # Calculate total students (including S and X grades)
+        pivot["Total"] = pivot[ALLOWED_GRADES].sum(axis=1)
+
+        pivot["Avg."] = np.where(
             total_counts > 0,
             weighted_sum / total_counts,
             np.nan  # or 0, if you want 0 instead of NaN
         )
 
-        # Optionally round
-        pivot["Average Grade"] = pivot["Average Grade"].round(2)
+        # Round average grade to 2 decimal places
+        pivot["Avg."] = pivot["Avg."].round(2)
+
+        # Convert grade counts to integers
+        for grade in ALLOWED_GRADES:
+            pivot[grade] = pivot[grade].astype(int)
+        pivot["Total"] = pivot["Total"].astype(int)
 
         print(f"\nGrade distribution for courses taught by {prof_name}:")
         print(pivot.to_string(index=False))
+        
+        # Create and display the grade distribution graph
+        plot_grade_distribution(pivot, prof_name)
 
 if __name__ == '__main__':
     print('\nWelcome to Grading Kaisi Hai?! \n')
