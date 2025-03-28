@@ -139,9 +139,13 @@ def plot_grade_distribution(pivot_df, prof_name):
     """
     Creates a bar chart showing the grade distribution for a professor.
     Shows percentage of students who received each grade.
+    Excludes S and X grades from calculations.
     """
-    # Calculate total students per grade across all courses
-    grade_counts = pivot_df[ALLOWED_GRADES].sum()
+    # Define grades to include in the plot (excluding S and X)
+    plot_grades = ["A*", "A", "B+", "B", "C+", "C", "D+", "D", "E", "F"]
+    
+    # Calculate total students per grade across all courses (excluding S and X)
+    grade_counts = pivot_df[plot_grades].sum()
     total_students = grade_counts.sum()
     
     # Calculate percentages
@@ -149,10 +153,10 @@ def plot_grade_distribution(pivot_df, prof_name):
     
     # Create the plot
     plt.figure(figsize=(12, 6))
-    bars = plt.bar(ALLOWED_GRADES, grade_percentages)
+    bars = plt.bar(plot_grades, grade_percentages)
     
     # Customize the plot
-    plt.title(f'Grade Distribution for Professor {prof_name}\nBased on {total_students} students across all courses')
+    plt.title(f'Grade Distribution for Professor {prof_name}\nBased on {total_students} students across all courses (excluding S/X grades)')
     plt.xlabel('Grades')
     plt.ylabel('Percentage of Students')
     plt.grid(True, axis='y', linestyle='--', alpha=0.7)
